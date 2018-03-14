@@ -1,0 +1,10 @@
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\bin\Debug\queueMultithreadTest.exe.config
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\queueMultithreadTest.csprojResolveAssemblyReference.cache
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\queueMultithreadTest.Form1.resources
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\queueMultithreadTest.Properties.Resources.resources
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\queueMultithreadTest.csproj.GenerateResource.Cache
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\bin\Debug\queueMultithreadTest.exe
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\bin\Debug\queueMultithreadTest.pdb
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\queueMultithreadTest.exe
+c:\users\mr\documents\visual studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\queueMultithreadTest.pdb
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\bin\Debug\Microsoft.SqlServer.XE.Core.dll

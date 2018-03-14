@@ -1,0 +1,13 @@
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\XEventCapture.csprojResolveAssemblyReference.cache
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\XEventCapture.Form1.resources
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\XEventCapture.Properties.Resources.resources
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\XEventCapture.csproj.GenerateResource.Cache
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\bin\Debug\Microsoft.SqlServer.XE.Core.dll
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\bin\Debug\XEventCapture.exe.config
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\bin\Debug\XEventCapture.exe
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\bin\Debug\XEventCapture.pdb
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\XEventCapture.exe
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\queueMultithreadTest\queueMultithreadTest\obj\Debug\XEventCapture.pdb
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\bin\Debug\XEventCapture.exe.config
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\obj\Debug\XEventCapture.exe
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\obj\Debug\XEventCapture.pdb
