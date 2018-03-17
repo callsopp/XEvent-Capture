@@ -1,5 +1,8 @@
 # XEvent-Capture
 A high throughput extended event capture system for distributed Microsoft SQL Servers, capable of reading multiple event streams and outputting to one central monitoring location.
+
+In its simplest form, just enter a server name, pick the events to capture, set the session to active and the application will handle the rest.  The default xevent session has been tested to have minimal impact on server performance and will capture all waits, blocking, deadlocks, rowset calls with ability to filter at application level, removing load on event sessions on target servers.
+
 Event dataloss dependent on the size of your boat ;)
 
 
@@ -9,9 +12,9 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 
-.NET 4.5
-Microsoft SQL Server 2014
-Visual Studio 2013
+* .NET 4.5
+* Microsoft SQL Server 2014
+* Visual Studio 2013
 
 
 ### Installing
@@ -21,31 +24,6 @@ TBC
 ```
 TBC
 ```
-
-
-## Running the tests
-
-Explain how to run the automated tests for this system
-
-### Break down into end to end tests
-
-Explain what these tests test and why
-
-```
-Give an example
-```
-
-### And coding style tests
-
-Explain what these tests test and why
-
-```
-Give an example
-```
-
-## Deployment
-
-Add additional notes about how to deploy this on a live system
 
 ## Built With
 
@@ -59,7 +37,7 @@ Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c6
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags). 
+For the versions available, see the [tags on this repository](https://github.com/callsopp/XEvent-Capture/tags). 
 
 ## Authors
 
