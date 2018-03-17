@@ -11,7 +11,6 @@ using System.Data.SqlClient;
 using Microsoft.SqlServer.Management.XEvent;
 using Microsoft.SqlServer.XEvent;
 using Microsoft.SqlServer.XEvent.Linq;
-using System.Globalization;
 
 namespace XEventCapture
 {
@@ -275,6 +274,8 @@ namespace XEventCapture
                             QICommand.Parameters.Add("@nest_level", SqlDbType.BigInt).Value = eItem.nest_level;
                             QICommand.Parameters.Add("@wait_type", SqlDbType.NVarChar, 120).Value = eItem.wait_type;
                             QICommand.Parameters.Add("@wait_resource", SqlDbType.NVarChar, 3072).Value = eItem.wait_resource;
+                            QICommand.Parameters.Add("@resource_owner_type", SqlDbType.NVarChar, 60).Value = eItem.resource_owner_type;
+                            QICommand.Parameters.Add("@lock_mode", SqlDbType.VarChar, 30).Value = eItem.lock_mode;
                             foreach (SqlParameter sp in QICommand.Parameters)
                             {
                                 if (sp.Value == "")
@@ -344,6 +345,8 @@ namespace XEventCapture
         public int nest_level { get; set; }
         public string wait_type { get; set; }
         public string wait_resource { get; set; }
+        public string resource_owner_type { get; set; }
+        public string lock_mode { get; set; }
     }
 
     public class CaptureExtendedEvents
@@ -532,7 +535,8 @@ namespace XEventCapture
                                             int nest_level = 0;
                                             string wait_type = "";
                                             string wait_resource = "";
-
+                                            string resource_owner_type = "";
+                                            string lock_mode = "";
 
                                             PublishedEventField ef;
                                             event_name = _xEvent.Name;
@@ -584,6 +588,18 @@ namespace XEventCapture
                                             if (_xEvent.Fields.TryGetValue("wait_resource", out ef))
                                             {
                                                 wait_resource = ef.Value.ToString();
+                                            }
+                                            if (_xEvent.Fields.TryGetValue("blocked_process", out ef))
+                                            {
+                                                xml_report = ef.Value.ToString();
+                                            }
+                                            if (_xEvent.Fields.TryGetValue("resource_owner_type", out ef))
+                                            {
+                                                resource_owner_type = ef.Value.ToString();
+                                            }
+                                            if (_xEvent.Fields.TryGetValue("lock_mode", out ef))
+                                            {
+                                                lock_mode = ef.Value.ToString();
                                             }
 
                                             PublishedAction ss;
@@ -674,6 +690,10 @@ namespace XEventCapture
                                                                             , causality_guid = causality_guid
                                                                             , causality_seq = causality_seq
                                                                             , nest_level = nest_level
+                                                                            , wait_type = wait_type
+                                                                            , wait_resource = wait_resource
+                                                                            , resource_owner_type = resource_owner_type
+                                                                            , lock_mode = lock_mode
                                                                             }, null);
                                             }
                                         }
