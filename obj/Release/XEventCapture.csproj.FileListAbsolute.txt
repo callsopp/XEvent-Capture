@@ -1,0 +1,11 @@
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\bin\Release\XEventCapture.exe.config
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\bin\Release\XEventCapture.exe
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\bin\Release\XEventCapture.pdb
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\bin\Release\Microsoft.SqlServer.XE.Core.dll
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\bin\Release\Microsoft.SqlServer.XEvent.Linq.dll
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\obj\Release\XEventCapture.csprojResolveAssemblyReference.cache
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\obj\Release\XEventCapture.Form1.resources
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\obj\Release\XEventCapture.Properties.Resources.resources
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\obj\Release\XEventCapture.csproj.GenerateResource.Cache
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\obj\Release\XEventCapture.exe
+C:\Users\Mr\Documents\Visual Studio 2013\Projects\XEventCapture\XEventCapture\obj\Release\XEventCapture.pdb

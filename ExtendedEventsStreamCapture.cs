@@ -11,6 +11,7 @@ using System.Data.SqlClient;
 using Microsoft.SqlServer.Management.XEvent;
 using Microsoft.SqlServer.XEvent;
 using Microsoft.SqlServer.XEvent.Linq;
+using System.Runtime;
 
 namespace XEventCapture
 {
@@ -26,7 +27,7 @@ namespace XEventCapture
         private static TimerCallback _checkforchangesCallback;
         private static object _CheckForChangesLocker = new object();
         private static Dictionary<int, string> _CapturesRunning = new Dictionary<int, string>(); /* use the dictionary to store the session ID and server session name - searching on an int as a key is faster */
-
+        
         public ExtendedEventCaptureMonitor(string MonitoringServer)
         {
             _MonitoringServer = MonitoringServer;
@@ -56,11 +57,10 @@ namespace XEventCapture
                             adapter.SelectCommand = GetServersToTrace;
                             adapter.Fill(dt);
                         }
-
                     }
                     catch (Exception xyz)
                     {
-
+                        Console.WriteLine("Error in CheckControlForChanges " + xyz.ToString());
                     }
                     finally
                     {
@@ -100,37 +100,16 @@ namespace XEventCapture
                                     _CapturesRunning.Add(Convert.ToInt32(dt.Rows[i]["sID"]), (string)dt.Rows[i]["server_name"] + "_" + (string)dt.Rows[i]["session_name"]);
                                     while (DateTime.Now < NextCaptureStartAllowedAt)
                                     {
-                                        Thread.Sleep(300);
+                                        Thread.Sleep(127);
                                     }
 
                                     StartCapture(Convert.ToInt32(dt.Rows[i]["sID"]), (string)dt.Rows[i]["server_name"], (string)dt.Rows[i]["session_name"]);
-                                    NextCaptureStartAllowedAt = DateTime.Now.AddMilliseconds(1500);
+                                    NextCaptureStartAllowedAt = DateTime.Now.AddMilliseconds(512);
 
                                 }
                                 else if (_CapturesRunning.TryGetValue(Convert.ToInt32(dt.Rows[i]["sID"]), out ss) && Convert.ToInt64(dt.Rows[i]["secs_since_last_heartbeat"]) > 10)
                                 {
-
-                                    try
-                                    {
-                                        MonConn = new SqlConnection(MonServerConnString);
-                                        MonConn.Open();
-                                        SqlCommand ResetSession = MonConn.CreateCommand();
-                                        ResetSession.CommandType = CommandType.StoredProcedure;
-                                        ResetSession.CommandText = "ResetSession";
-                                        SqlParameter sID = new SqlParameter("@sID", SqlDbType.Int);
-                                        ResetSession.Parameters.Add(sID);
-                                        sID.Value = Convert.ToInt32(dt.Rows[i]["sID"]);
-                                        ResetSession.ExecuteNonQuery();
-                                    }
-                                    catch (Exception xyz)
-                                    {
-                                    }
-                                    finally
-                                    {
-                                        MonConn.Close();
-                                    }
-
-                                    _CapturesRunning.Remove(Convert.ToInt32(dt.Rows[i]["sID"]));
+                                    Console.WriteLine("10 seconds since last heartbeat from server: " + (string)dt.Rows[i]["server_name"]);
                                 }
                             }
                         }
@@ -145,76 +124,31 @@ namespace XEventCapture
 
         private async void StartCapture(int sID, string server_name, string session_name)
         {
-            CaptureExtendedEvents cee = new CaptureExtendedEvents(_MonitoringServer, server_name, session_name);
-            await Task.Run(() =>
+            try
             {
-                cee.StartEventStreamCollection();
-            });
+                CaptureExtendedEvents cee = new CaptureExtendedEvents(_MonitoringServer, server_name, session_name);
+                await Task.Run(() =>
+                {
+                    cee.StartEventStreamCollection();
+                });
+            }catch(Exception ex)
+            {
+                Console.WriteLine("Error starting capture: [" + _MonitoringServer + "] : [" + server_name + "] : [" + session_name + "]");
+            }
             _CapturesRunning.Remove(sID);
         }
     }
 
-    public class EventQueue<T>
-    {
-        private readonly Queue<T> _queue = new Queue<T>();
-
-        public void Enqueue(T item)
-        {
-            lock (_queue)
-            {
-                _queue.Enqueue(item);
-                if (_queue.Count == 1)
-                    Monitor.PulseAll(_queue);
-            }
-        }
-
-        public T Dequeue()
-        {
-            lock (_queue)
-            {
-                while (_queue.Count == 0)
-                    Monitor.Wait(_queue);
-
-                return _queue.Dequeue();
-            }
-        }
-
-        public int Count
-        {
-            get {
-                    return _queue.Count;
-                }
-        }
-
-        public void Clear()
-        {
-            _queue.Clear();
-        }
-    
-    }
-
     public class QueuedEventInserter
     {
-        private EventQueue<XEventItem> eventQueue;
-        private object _EventInsertLocker = new object();
         private string _ServerName;
         private string _MonitoringServer;
-        private System.Threading.Timer _InsertTimer;
-        private TimerCallback _callback;
+        private int counter = 0;
 
         public QueuedEventInserter(string MonitoringServer, string ServerName)
         {
-            eventQueue = new EventQueue<XEventItem>();
             _ServerName = ServerName;
             _MonitoringServer = MonitoringServer;
-            _callback = new TimerCallback(EventInsert);
-            _InsertTimer = new Timer(_callback, null, 0, 500);
-        }
-
-        ~QueuedEventInserter()
-        {
-            _InsertTimer.Dispose();
-            eventQueue.Clear();
         }
 
         public void SubscribeToEventStream(CaptureExtendedEvents ves)
@@ -222,102 +156,76 @@ namespace XEventCapture
             ves.streamEvent += QueueEventItemForInsert;
         }
 
-        private void QueueEventItemForInsert(XEventItem ei, EventArgs ea)
+        public void UnsubscribeFromEventStream(CaptureExtendedEvents ves)
         {
-            eventQueue.Enqueue(ei);
+            ves.streamEvent -= QueueEventItemForInsert;
         }
 
-        private void Clear()
+        private async void QueueEventItemForInsert(XEventItem ei, EventArgs ea)
         {
-            eventQueue.Clear();
-        }
-
-        private void EventInsert(object stateInfo)
-        {
-            /* if the inserts are started then dont fire another EventInsert as the process is already looping */
-            if (Monitor.TryEnter(_EventInsertLocker))
+            try
             {
-                try
+                await Task.Run(async () =>
                 {
-                    int counter = 0;
-                    do
-                    {
-
-                        try
-                        {
-                            SqlCommand QICommand;
-                            QICommand = new SqlCommand();
-                            QICommand.CommandType = CommandType.StoredProcedure;
-                            XEventItem eItem = (XEventItem)eventQueue.Dequeue();
-                            counter++;
-                            QICommand.CommandText = "dbo.InsertXETraceEvent";
-                            QICommand.Parameters.Add("@event_name", SqlDbType.VarChar, 75).Value = eItem.event_name;
-                            QICommand.Parameters.Add("@server_name", SqlDbType.VarChar, 30).Value = eItem.server_name;
-                            QICommand.Parameters.Add("@event_timestamp", SqlDbType.DateTime2,8).Value = eItem.event_timestamp;
-                            QICommand.Parameters.Add("@session_id", SqlDbType.VarChar, 200).Value = eItem.session_id;
-                            QICommand.Parameters.Add("@transaction_id", SqlDbType.VarChar, 200).Value = eItem.transaction_id;
-                            QICommand.Parameters.Add("@database_name", SqlDbType.VarChar, 255).Value = eItem.database_name;
-                            QICommand.Parameters.Add("@nt_username", SqlDbType.VarChar, 40).Value = eItem.nt_username;
-                            QICommand.Parameters.Add("@object_name", SqlDbType.VarChar, 255).Value = eItem.object_name;
-                            QICommand.Parameters.Add("@duration", SqlDbType.BigInt).Value = eItem.duration;
-                            QICommand.Parameters.Add("@statement", SqlDbType.NVarChar).Value = eItem.statement;
-                            QICommand.Parameters.Add("@xml_report", SqlDbType.Xml).Value = eItem.xml_report;
-                            QICommand.Parameters.Add("@client_hostname", SqlDbType.VarChar, 30).Value = eItem.client_hostname;
-                            QICommand.Parameters.Add("@application_name", SqlDbType.VarChar, 255).Value = eItem.application_name;
-                            QICommand.Parameters.Add("@cpu_time", SqlDbType.BigInt).Value = eItem.cpu_time;
-                            QICommand.Parameters.Add("@physical_reads", SqlDbType.BigInt).Value = eItem.physical_reads;
-                            QICommand.Parameters.Add("@logical_reads", SqlDbType.BigInt).Value = eItem.logical_reads;
-                            QICommand.Parameters.Add("@writes", SqlDbType.BigInt).Value = eItem.writes;
-                            QICommand.Parameters.Add("@row_count", SqlDbType.BigInt).Value = eItem.row_count;
-                            QICommand.Parameters.Add("@causality_guid", SqlDbType.VarChar, 36).Value = eItem.causality_guid;
-                            QICommand.Parameters.Add("@causality_seq", SqlDbType.BigInt).Value = eItem.causality_seq;
-                            QICommand.Parameters.Add("@nest_level", SqlDbType.BigInt).Value = eItem.nest_level;
-                            QICommand.Parameters.Add("@wait_type", SqlDbType.NVarChar, 120).Value = eItem.wait_type;
-                            QICommand.Parameters.Add("@wait_resource", SqlDbType.NVarChar, 3072).Value = eItem.wait_resource;
-                            QICommand.Parameters.Add("@resource_owner_type", SqlDbType.NVarChar, 60).Value = eItem.resource_owner_type;
-                            QICommand.Parameters.Add("@lock_mode", SqlDbType.VarChar, 30).Value = eItem.lock_mode;
-                            foreach (SqlParameter sp in QICommand.Parameters)
-                            {
-                                if (sp.Value == "")
-                                {
-                                    sp.Value = System.DBNull.Value;
-                                }
-                            }
-                            InsertXEventAsync(QICommand); /* Fire and forget - do not hold up the queue */
-                        }
-                        catch (Exception dQe)
-                        {
-                            Console.WriteLine("Error in dequeue - possible queue clear: " + dQe.ToString());
-                        }
-                    } while (Convert.ToInt32(eventQueue.Count) != 0);
-                }
-                finally
-                {
-                    Monitor.Exit(_EventInsertLocker);
-                }
+                    await InsertXEventAsync(ei);
+                });
+            }catch(Exception ex)
+            {
+                Console.WriteLine("Error on async insert" + ex.ToString());
             }
         }
 
-        private async Task InsertXEventAsync(SqlCommand insCommand)
+        private async Task InsertXEventAsync(XEventItem eItem)
         {
-            using (SqlConnection insConn = new SqlConnection("Server=" + _MonitoringServer + ";Database=XEventTrace;Application Name=XEventInsert-" + _ServerName + ";Trusted_Connection=True;Min Pool Size=10;Max Pool Size=250;"))
+            SqlCommand QICommand;
+            QICommand = new SqlCommand();
+            QICommand.CommandType = CommandType.StoredProcedure;
+            QICommand.CommandText = "dbo.InsertXETraceEvent";
+            QICommand.Parameters.Add("@event_name", SqlDbType.VarChar, 75).Value = eItem.event_name;
+            QICommand.Parameters.Add("@server_name", SqlDbType.VarChar, 30).Value = eItem.server_name;
+            QICommand.Parameters.Add("@event_timestamp", SqlDbType.DateTime2, 8).Value = eItem.event_timestamp;
+            QICommand.Parameters.Add("@session_id", SqlDbType.VarChar, 200).Value = eItem.session_id;
+            QICommand.Parameters.Add("@transaction_id", SqlDbType.VarChar, 200).Value = eItem.transaction_id;
+            QICommand.Parameters.Add("@database_name", SqlDbType.VarChar, 255).Value = eItem.database_name;
+            QICommand.Parameters.Add("@nt_username", SqlDbType.VarChar, 40).Value = eItem.nt_username;
+            QICommand.Parameters.Add("@object_name", SqlDbType.VarChar, 255).Value = eItem.object_name;
+            QICommand.Parameters.Add("@duration", SqlDbType.BigInt).Value = eItem.duration;
+            QICommand.Parameters.Add("@statement", SqlDbType.NVarChar).Value = eItem.statement.ToString();
+            QICommand.Parameters.Add("@xml_report", SqlDbType.NVarChar, -1).Value = eItem.xml_report.ToString();
+            QICommand.Parameters.Add("@client_hostname", SqlDbType.VarChar, 30).Value = eItem.client_hostname;
+            QICommand.Parameters.Add("@application_name", SqlDbType.VarChar, 255).Value = eItem.application_name;
+            QICommand.Parameters.Add("@cpu_time", SqlDbType.BigInt).Value = eItem.cpu_time;
+            QICommand.Parameters.Add("@physical_reads", SqlDbType.BigInt).Value = eItem.physical_reads;
+            QICommand.Parameters.Add("@logical_reads", SqlDbType.BigInt).Value = eItem.logical_reads;
+            QICommand.Parameters.Add("@writes", SqlDbType.BigInt).Value = eItem.writes;
+            QICommand.Parameters.Add("@row_count", SqlDbType.BigInt).Value = eItem.row_count;
+            QICommand.Parameters.Add("@causality_guid", SqlDbType.VarChar, 36).Value = eItem.causality_guid;
+            QICommand.Parameters.Add("@causality_seq", SqlDbType.BigInt).Value = eItem.causality_seq;
+            QICommand.Parameters.Add("@nest_level", SqlDbType.BigInt).Value = eItem.nest_level;
+            QICommand.Parameters.Add("@wait_type", SqlDbType.NVarChar, 120).Value = eItem.wait_type;
+            QICommand.Parameters.Add("@wait_resource", SqlDbType.NVarChar, 3072).Value = eItem.wait_resource;
+            QICommand.Parameters.Add("@resource_owner_type", SqlDbType.NVarChar, 60).Value = eItem.resource_owner_type;
+            QICommand.Parameters.Add("@lock_mode", SqlDbType.VarChar, 30).Value = eItem.lock_mode;
+            foreach (SqlParameter sp in QICommand.Parameters)
             {
-                using (insCommand)
+                if (sp.Value == "")
                 {
-                    insCommand.Connection = insConn;
-                    insConn.Open();
-                    await insCommand.ExecuteNonQueryAsync().ContinueWith(_ => insCommand.Connection.Close());
+                    sp.Value = System.DBNull.Value;
                 }
             }
-        }
-    }
 
-    public static class TaskExtensions
-    {
-        public static void SwallowException(this Task task)
-        {
-            task.ContinueWith(_ => { return; });
+            using (SqlConnection insConn = new SqlConnection("Server=" + _MonitoringServer + ";Database=XEventTrace;Application Name=XEventInsert-" + _ServerName + ";Trusted_Connection=True;Min Pool Size=10;Max Pool Size=500;"))
+            {
+                using (QICommand)
+                {
+                    QICommand.Connection = insConn;
+                    await insConn.OpenAsync().ConfigureAwait(true);
+                    await QICommand.ExecuteNonQueryAsync().ContinueWith(_ => insConn.Close());
+                }
+            }
+
         }
+
     }
 
     public class XEventItem
@@ -332,7 +240,7 @@ namespace XEventCapture
         public string object_name { get; set; }
         public Int64 duration { get; set; }
         public string statement { get; set; }
-        public string xml_report { get; set; }
+        public StringBuilder xml_report { get; set; }
         public string client_hostname { get; set; }
         public string application_name { get; set; }
         public Int64 cpu_time { get; set; }
@@ -354,7 +262,7 @@ namespace XEventCapture
         public event StreamEvent streamEvent;
         public EventArgs a;
         public delegate void StreamEvent(XEventItem ei, EventArgs a);
-
+        
         public event ClearEventQueue clearEvents;
         public EventArgs k;
         public delegate void ClearEventQueue(EventArgs k);
@@ -373,7 +281,6 @@ namespace XEventCapture
         private bool _StopRequested = false;
 
         private QueuedEventInserter eQueue;
-
         public CaptureExtendedEvents(string MonitoringServer, string ServerName, string SessionName)
         {
             _monitoringServer = MonitoringServer;
@@ -389,7 +296,7 @@ namespace XEventCapture
 
         private void KeepRunningChecker(object stateInfo)
         {
-            if (Monitor.TryEnter(_keepRunningLocker))
+            if (Monitor.TryEnter(_keepRunningLocker) && !_StopRequested)
             {
                 SqlConnection MonConn = null;
                 try
@@ -411,7 +318,6 @@ namespace XEventCapture
                     GetServersToTrace.Parameters.Add(last_event_count);
                     last_event_count.Value = _CapturesInTheLastSecond;
 
-
                     using (SqlDataReader reader = GetServersToTrace.ExecuteReader())
                     {
                         while (reader.Read())
@@ -423,9 +329,9 @@ namespace XEventCapture
                                 _StopRequested = true;
                                 if (_xEventDataStream != null)
                                 {
+                                    eQueue.UnsubscribeFromEventStream(this); /* unsubscribe the queued inserter */
                                     _xEventDataStream.Dispose(); /* reset the stream to force exit */
                                 }
-                                clearEvents(null);
                             }
                         }
                     }
@@ -508,35 +414,64 @@ namespace XEventCapture
                             {
                                 try
                                 {
+                                    string server_name = "";
+                                    string event_timestamp = "";
+                                    string event_name = "";
+                                    Int64 session_id = 0;
+                                    Int64 transaction_id = 0;
+                                    string database_name = "";
+                                    string nt_username = "";
+                                    string object_name = "";
+                                    Int64 duration = 0;
+                                    string statement = "";//new StringBuilder();
+                                    StringBuilder xml_report = new StringBuilder();
+                                    string client_hostname = "";
+                                    string application_name = "";
+                                    Int64 cpu_time = 0;
+                                    Int64 physical_reads = 0;
+                                    Int64 logical_reads = 0;
+                                    Int64 writes = 0;
+                                    Int64 row_count = 0;
+                                    string causality_guid = "";
+                                    int causality_seq = 0;
+                                    int nest_level = 0;
+                                    string wait_type = "";
+                                    string wait_resource = "";
+                                    string resource_owner_type = "";
+                                    string lock_mode = "";
+
                                     using (_xEventDataStream = new QueryableXEventData(_xEventConnectionString, _sessionName, EventStreamSourceOptions.EventStream, EventStreamCacheOptions.DoNotCache))
                                     {
                                         foreach (PublishedEvent _xEvent in _xEventDataStream)
                                         {
-                                            string server_name = "";
-                                            string event_timestamp = "";
-                                            string event_name = "";
-                                            Int64 session_id = 0;
-                                            Int64 transaction_id = 0;
-                                            string database_name = "";
-                                            string nt_username = "";
-                                            string object_name = "";
-                                            Int64 duration = 0;
-                                            string statement = "";
-                                            string xml_report = "";
-                                            string client_hostname = "";
-                                            string application_name = "";
-                                            Int64 cpu_time = 0;
-                                            Int64 physical_reads = 0;
-                                            Int64 logical_reads = 0;
-                                            Int64 writes = 0;
-                                            Int64 row_count = 0;
-                                            string causality_guid = "";
-                                            int causality_seq = 0;
-                                            int nest_level = 0;
-                                            string wait_type = "";
-                                            string wait_resource = "";
-                                            string resource_owner_type = "";
-                                            string lock_mode = "";
+                                            server_name = "";
+                                            event_timestamp = "";
+                                            event_name = "";
+                                            session_id = 0;
+                                            transaction_id = 0;
+                                            database_name = "";
+                                            nt_username = "";
+                                            object_name = "";
+                                            duration = 0;
+                                            //statement.Clear();
+                                            //statement.Append("");
+                                            statement = "";
+                                            xml_report.Clear();
+                                            xml_report.Append("");
+                                            client_hostname = "";
+                                            application_name = "";
+                                            cpu_time = 0;
+                                            physical_reads = 0;
+                                            logical_reads = 0;
+                                            writes = 0;
+                                            row_count = 0;
+                                            causality_guid = "";
+                                            causality_seq = 0;
+                                            nest_level = 0;
+                                            wait_type = "";
+                                            wait_resource = "";
+                                            resource_owner_type = "";
+                                            lock_mode = "";
 
                                             PublishedEventField ef;
                                             event_name = _xEvent.Name;
@@ -551,6 +486,7 @@ namespace XEventCapture
                                             }
                                             if (_xEvent.Fields.TryGetValue("statement", out ef))
                                             {
+                                                //statement.Append(ef.Value.ToString());
                                                 statement = ef.Value.ToString();
                                             }
                                             if (_xEvent.Fields.TryGetValue("cpu_time", out ef))
@@ -575,7 +511,7 @@ namespace XEventCapture
                                             }
                                             if (_xEvent.Fields.TryGetValue("xml_report", out ef))
                                             {
-                                                xml_report = ef.Value.ToString();
+                                                xml_report.Append(ef.Value.ToString());
                                             }
                                             if (_xEvent.Fields.TryGetValue("nest_level", out ef))
                                             {
@@ -591,7 +527,7 @@ namespace XEventCapture
                                             }
                                             if (_xEvent.Fields.TryGetValue("blocked_process", out ef))
                                             {
-                                                xml_report = ef.Value.ToString();
+                                                xml_report.Append(ef.Value.ToString());
                                             }
                                             if (_xEvent.Fields.TryGetValue("resource_owner_type", out ef))
                                             {
@@ -638,6 +574,7 @@ namespace XEventCapture
                                             }
                                             if (_xEvent.Actions.TryGetValue("sql_text", out ss))
                                             {
+                                                //statement.Append(_xEvent.Actions["sql_text"].Value.ToString());
                                                 statement = _xEvent.Actions["sql_text"].Value.ToString();
                                             }
                                             if (_xEvent.Actions.TryGetValue("attach_activity_id", out ss))
@@ -656,7 +593,7 @@ namespace XEventCapture
 
                                             _CapturesInTheLastSecond++; /* increase the capture count for this session */
 
-
+                                            /* TODO: exclusions are to be generated to go in here */
                                             if (object_name != "InsertXETraceEvent" && object_name != "sp_reset_connection"
                                                 && (
                                                        (_CapturesInTheLastSecond < 10000 && event_name.Contains("wait")) 

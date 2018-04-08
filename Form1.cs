@@ -21,7 +21,8 @@ namespace XEventCapture
         private void createVirtualStreamBT_Click(object sender, EventArgs e)
         {
             //var t = Task.Run(() => { new ExtendedEventStreamCapture("mr-pc",textBox1.Text, textBox2.Text); });
-            var t = Task.Run(() => { new ExtendedEventCaptureMonitor("MR-PC"); });
+            //var t = Task.Run(() => { new ExtendedEventCaptureMonitor("192.168.1.86"); });
+            var t = Task.Run(() => { new ExtendedEventCaptureMonitor("mr-pc"); });
             //ExtendedEventStreamCapture x = new ExtendedEventStreamCapture(textBox1.Text, textBox2.Text);
             //x.AttachStream();
         }   
