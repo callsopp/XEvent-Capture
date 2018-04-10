@@ -139,11 +139,12 @@ namespace XEventCapture
         }
     }
 
-    public class QueuedEventInserter
+    sealed class QueuedEventInserter
     {
         private string _ServerName;
         private string _MonitoringServer;
-        private int counter = 0;
+        private object _statementTextLocker = new object();
+        private object _xmlTextLocker = new object();
 
         public QueuedEventInserter(string MonitoringServer, string ServerName)
         {
@@ -165,10 +166,7 @@ namespace XEventCapture
         {
             try
             {
-                await Task.Run(async () =>
-                {
-                    await InsertXEventAsync(ei);
-                });
+                await InsertXEventAsync(ei).ConfigureAwait(true);
             }catch(Exception ex)
             {
                 Console.WriteLine("Error on async insert" + ex.ToString());
@@ -190,8 +188,14 @@ namespace XEventCapture
             QICommand.Parameters.Add("@nt_username", SqlDbType.VarChar, 40).Value = eItem.nt_username;
             QICommand.Parameters.Add("@object_name", SqlDbType.VarChar, 255).Value = eItem.object_name;
             QICommand.Parameters.Add("@duration", SqlDbType.BigInt).Value = eItem.duration;
-            QICommand.Parameters.Add("@statement", SqlDbType.NVarChar).Value = eItem.statement.ToString();
-            QICommand.Parameters.Add("@xml_report", SqlDbType.NVarChar, -1).Value = eItem.xml_report.ToString();
+            lock (_statementTextLocker)
+            {
+                QICommand.Parameters.Add("@statement", SqlDbType.NVarChar, -1).Value = eItem.statement.ToString();
+            }
+            lock (_xmlTextLocker)
+            {
+                QICommand.Parameters.Add("@xml_report", SqlDbType.NVarChar, -1).Value = eItem.xml_report.ToString();
+            }
             QICommand.Parameters.Add("@client_hostname", SqlDbType.VarChar, 30).Value = eItem.client_hostname;
             QICommand.Parameters.Add("@application_name", SqlDbType.VarChar, 255).Value = eItem.application_name;
             QICommand.Parameters.Add("@cpu_time", SqlDbType.BigInt).Value = eItem.cpu_time;
@@ -239,7 +243,7 @@ namespace XEventCapture
         public string nt_username { get; set; }
         public string object_name { get; set; }
         public Int64 duration { get; set; }
-        public string statement { get; set; }
+        public StringBuilder statement { get; set; }
         public StringBuilder xml_report { get; set; }
         public string client_hostname { get; set; }
         public string application_name { get; set; }
@@ -257,15 +261,11 @@ namespace XEventCapture
         public string lock_mode { get; set; }
     }
 
-    public class CaptureExtendedEvents
+    internal class CaptureExtendedEvents
     {
         public event StreamEvent streamEvent;
         public EventArgs a;
         public delegate void StreamEvent(XEventItem ei, EventArgs a);
-        
-        public event ClearEventQueue clearEvents;
-        public EventArgs k;
-        public delegate void ClearEventQueue(EventArgs k);
 
         private string _serverName;
         private string _sessionName;
@@ -275,9 +275,12 @@ namespace XEventCapture
         private QueryableXEventData _xEventDataStream;
         private object _streamLocker = new object();
         private object _keepRunningLocker = new object();
+        private object _statementTextLocker = new object();
+        private object _xmlTextLocker = new object();
         private System.Threading.Timer _KeepRunningTimer;
         private TimerCallback _keeprunningcallback;
         private int _CapturesInTheLastSecond = 0;
+        private int _ValidCapturesInTheLastSecond = 0;
         private bool _StopRequested = false;
 
         private QueuedEventInserter eQueue;
@@ -318,6 +321,10 @@ namespace XEventCapture
                     GetServersToTrace.Parameters.Add(last_event_count);
                     last_event_count.Value = _CapturesInTheLastSecond;
 
+                    SqlParameter last_valid_event_count = new SqlParameter("@last_valid_event_count", SqlDbType.VarChar);
+                    GetServersToTrace.Parameters.Add(last_valid_event_count);
+                    last_valid_event_count.Value = _ValidCapturesInTheLastSecond;
+
                     using (SqlDataReader reader = GetServersToTrace.ExecuteReader())
                     {
                         while (reader.Read())
@@ -325,6 +332,7 @@ namespace XEventCapture
                             if (!Convert.ToBoolean(reader["active"]))
                             {
                                 _CapturesInTheLastSecond = 0; /* reset to capture count */
+                                _ValidCapturesInTheLastSecond = 0; /* reset to capture count */
                                 _KeepRunningTimer.Dispose();
                                 _StopRequested = true;
                                 if (_xEventDataStream != null)
@@ -337,7 +345,7 @@ namespace XEventCapture
                     }
 
                     _CapturesInTheLastSecond = 0; /* reset to capture count */
-
+                    _ValidCapturesInTheLastSecond = 0; /* reset to capture count */
                 }
                 catch (Exception xyz)
                 {
@@ -414,64 +422,58 @@ namespace XEventCapture
                             {
                                 try
                                 {
-                                    string server_name = "";
-                                    string event_timestamp = "";
-                                    string event_name = "";
-                                    Int64 session_id = 0;
-                                    Int64 transaction_id = 0;
-                                    string database_name = "";
-                                    string nt_username = "";
-                                    string object_name = "";
-                                    Int64 duration = 0;
-                                    string statement = "";//new StringBuilder();
-                                    StringBuilder xml_report = new StringBuilder();
-                                    string client_hostname = "";
-                                    string application_name = "";
-                                    Int64 cpu_time = 0;
-                                    Int64 physical_reads = 0;
-                                    Int64 logical_reads = 0;
-                                    Int64 writes = 0;
-                                    Int64 row_count = 0;
-                                    string causality_guid = "";
-                                    int causality_seq = 0;
-                                    int nest_level = 0;
-                                    string wait_type = "";
-                                    string wait_resource = "";
-                                    string resource_owner_type = "";
-                                    string lock_mode = "";
-
                                     using (_xEventDataStream = new QueryableXEventData(_xEventConnectionString, _sessionName, EventStreamSourceOptions.EventStream, EventStreamCacheOptions.DoNotCache))
                                     {
                                         foreach (PublishedEvent _xEvent in _xEventDataStream)
                                         {
-                                            server_name = "";
-                                            event_timestamp = "";
-                                            event_name = "";
-                                            session_id = 0;
-                                            transaction_id = 0;
-                                            database_name = "";
-                                            nt_username = "";
-                                            object_name = "";
-                                            duration = 0;
-                                            //statement.Clear();
-                                            //statement.Append("");
-                                            statement = "";
-                                            xml_report.Clear();
-                                            xml_report.Append("");
-                                            client_hostname = "";
-                                            application_name = "";
-                                            cpu_time = 0;
-                                            physical_reads = 0;
-                                            logical_reads = 0;
-                                            writes = 0;
-                                            row_count = 0;
-                                            causality_guid = "";
-                                            causality_seq = 0;
-                                            nest_level = 0;
-                                            wait_type = "";
-                                            wait_resource = "";
-                                            resource_owner_type = "";
-                                            lock_mode = "";
+                                            string server_name = "";
+                                            string event_timestamp = "";
+                                            string event_name = "";
+                                            Int64 session_id = 0;
+                                            Int64 transaction_id = 0;
+                                            string database_name = "";
+                                            string nt_username = "";
+                                            string object_name = "";
+                                            Int64 duration = 0;
+                                            StringBuilder statement = new StringBuilder();
+                                            StringBuilder xml_report = new StringBuilder();
+                                            string client_hostname = "";
+                                            string application_name = "";
+                                            Int64 cpu_time = 0;
+                                            Int64 physical_reads = 0;
+                                            Int64 logical_reads = 0;
+                                            Int64 writes = 0;
+                                            Int64 row_count = 0;
+                                            string causality_guid = "";
+                                            int causality_seq = 0;
+                                            int nest_level = 0;
+                                            string wait_type = "";
+                                            string wait_resource = "";
+                                            string resource_owner_type = "";
+                                            string lock_mode = "";
+                                            //server_name = "";
+                                            //event_timestamp = "";
+                                            //event_name = "";
+                                            //session_id = 0;
+                                            //transaction_id = 0;
+                                            //database_name = "";
+                                            //nt_username = "";
+                                            //object_name = "";
+                                            //duration = 0;
+                                            //client_hostname = "";
+                                            //application_name = "";
+                                            //cpu_time = 0;
+                                            //physical_reads = 0;
+                                            //logical_reads = 0;
+                                            //writes = 0;
+                                            //row_count = 0;
+                                            //causality_guid = "";
+                                            //causality_seq = 0;
+                                            //nest_level = 0;
+                                            //wait_type = "";
+                                            //wait_resource = "";
+                                            //resource_owner_type = "";
+                                            //lock_mode = "";
 
                                             PublishedEventField ef;
                                             event_name = _xEvent.Name;
@@ -486,8 +488,11 @@ namespace XEventCapture
                                             }
                                             if (_xEvent.Fields.TryGetValue("statement", out ef))
                                             {
-                                                //statement.Append(ef.Value.ToString());
-                                                statement = ef.Value.ToString();
+                                                lock (_statementTextLocker)
+                                                {
+                                                    statement.Append(ef.Value.ToString());
+                                                }
+                                                //statement = ef.Value.ToString();
                                             }
                                             if (_xEvent.Fields.TryGetValue("cpu_time", out ef))
                                             {
@@ -511,7 +516,10 @@ namespace XEventCapture
                                             }
                                             if (_xEvent.Fields.TryGetValue("xml_report", out ef))
                                             {
-                                                xml_report.Append(ef.Value.ToString());
+                                                lock (_xmlTextLocker)
+                                                {
+                                                    xml_report.Append(ef.Value.ToString());
+                                                }
                                             }
                                             if (_xEvent.Fields.TryGetValue("nest_level", out ef))
                                             {
@@ -527,7 +535,10 @@ namespace XEventCapture
                                             }
                                             if (_xEvent.Fields.TryGetValue("blocked_process", out ef))
                                             {
-                                                xml_report.Append(ef.Value.ToString());
+                                                lock (_xmlTextLocker)
+                                                {
+                                                    xml_report.Append(ef.Value.ToString());
+                                                }
                                             }
                                             if (_xEvent.Fields.TryGetValue("resource_owner_type", out ef))
                                             {
@@ -574,8 +585,11 @@ namespace XEventCapture
                                             }
                                             if (_xEvent.Actions.TryGetValue("sql_text", out ss))
                                             {
-                                                //statement.Append(_xEvent.Actions["sql_text"].Value.ToString());
-                                                statement = _xEvent.Actions["sql_text"].Value.ToString();
+                                                lock (_statementTextLocker)
+                                                {
+                                                    statement.Append(_xEvent.Actions["sql_text"].Value.ToString());
+                                                }
+                                                //statement = _xEvent.Actions["sql_text"].Value.ToString();
                                             }
                                             if (_xEvent.Actions.TryGetValue("attach_activity_id", out ss))
                                             {
@@ -594,15 +608,15 @@ namespace XEventCapture
                                             _CapturesInTheLastSecond++; /* increase the capture count for this session */
 
                                             /* TODO: exclusions are to be generated to go in here */
-                                            if (object_name != "InsertXETraceEvent" && object_name != "sp_reset_connection"
-                                                && (
-                                                       (_CapturesInTheLastSecond < 10000 && event_name.Contains("wait")) 
+                                            if (/*object_name != "InsertXETraceEvent" && object_name != "sp_reset_connection"
+                                                &&*/ (
+                                                       (_CapturesInTheLastSecond < 10000 && event_name.Contains("wait"))
                                                     || (_CapturesInTheLastSecond > 10000 && !event_name.Contains("wait"))
                                                     || _CapturesInTheLastSecond < 10000
                                                     )
                                                 )
                                             {
-                                                
+                                                _ValidCapturesInTheLastSecond++;
                                                 /* XEvent Collected */
                                                 streamEvent(new XEventItem()
                                                                             {
