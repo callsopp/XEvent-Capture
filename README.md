@@ -28,7 +28,7 @@ TBC
 ## Built With
 
 * [VS2017](https://www.visualstudio.com/)
-* [XEvent](https://msdn.microsoft.com/en-us/library/bb630282(v=sql.105).aspx) - Queryable stream - no files, no fuss, just ringbufffer that thing!
+* [XEvent](https://msdn.microsoft.com/en-us/library/bb630282(v=sql.105).aspx) - EventStream
 
 
 ## Contributing
