@@ -12,9 +12,9 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 
-* .NET 4.5
+* .NET 4.7.2
 * Microsoft SQL Server 2014
-* Visual Studio 2013
+* Visual Studio 2017
 
 
 ### Installing
@@ -27,7 +27,7 @@ TBC
 
 ## Built With
 
-* [VS2013](https://www.visualstudio.com/) - Duh
+* [VS2017](https://www.visualstudio.com/)
 * [XEvent](https://msdn.microsoft.com/en-us/library/bb630282(v=sql.105).aspx) - Queryable stream - no files, no fuss, just ringbufffer that thing!
 
 
